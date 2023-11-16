@@ -1,7 +1,7 @@
 use itertools::Itertools;
-use petgraph::{graph::{NodeIndex, UnGraph, Edge}, data::FromElements, algo::min_spanning_tree};
-use rand::{seq::SliceRandom, thread_rng, rngs::ThreadRng};
-use std::{fmt::{Debug, Display}, collections::HashMap, cmp::Ordering};
+use petgraph::{graph::{Edge, NodeIndex, UnGraph}, data::FromElements, algo::min_spanning_tree};
+use rand::{rngs::ThreadRng, seq::SliceRandom, thread_rng};
+use std::{cmp::Ordering, collections::HashMap, fmt::{Debug, Display}};
 
 const ENTITIES: usize = 104;
 const ATTRIBUTES: usize = 104;
@@ -26,7 +26,10 @@ enum Clue<'a> {
     // Neighbour(&'a AttributeValue, &'a AttributeValue),
 }
 impl Clue<'_> {
-    fn from_edge<'a>(edge: &'a Edge<ClueType>, index_nodes: &'a HashMap<NodeIndex, &AttributeValue>) -> Clue<'a> {
+    fn from_edge<'a>(
+        edge: &'a Edge<ClueType>,
+        index_nodes: &'a HashMap<NodeIndex, &AttributeValue>,
+    ) -> Clue<'a> {
         let (a, b, c) = (edge.source(), edge.target(), &edge.weight);
         let (a, b) = (index_nodes.get(&a).unwrap(), index_nodes.get(&b).unwrap());
         match c {
@@ -73,12 +76,11 @@ fn main() {
     let mut rng = &mut thread_rng();
     let attr_vals = get_attribute_values();
 
-    let random_solution = get_solution(&attr_vals, &mut rng);
+    let random_solution = get_solution(&attr_vals, rng);
     let mut possible_clues = gen_possible_clues(&random_solution);
     possible_clues.shuffle(&mut rng);
-    // dbg!(&random_solution, &possible_clues);
-
     let mut full_graph = UnGraph::<&AttributeValue, ClueType>::new_undirected();
+
     let mut node_indices: HashMap::<&AttributeValue, NodeIndex> = HashMap::new();
     let mut index_nodes: HashMap::<NodeIndex, &AttributeValue> = HashMap::new();
 
@@ -97,13 +99,12 @@ fn main() {
         let (a, b) = (node_indices.get(a).cloned().unwrap(), node_indices.get(b).cloned().unwrap());
         full_graph.add_edge(a, b, c);
     }
-
-    // dbg!(&full_graph);
     
     let mst = UnGraph::<_, _>::from_elements(min_spanning_tree(&full_graph));
-    // dbg!(&mst);
 
-    let clues = mst.raw_edges().iter().map(|edge| Clue::from_edge(edge, &index_nodes)).collect::<Vec<Clue>>();
+    let clues = mst.raw_edges().iter()
+        .map(|edge| Clue::from_edge(edge, &index_nodes)).collect::<Vec<Clue>>();
+
     dbg!(&clues);
     dbg!(&clues.len());
 }
@@ -143,13 +144,25 @@ fn gen_possible_clues<'a>(solution: &'a Solution) -> Vec<Clue<'a>> {
 
                 if attr_a != 0 {
                     if entity > 0 {
-                        clues.push(Clue::Left(solution[attr_a][entity - 1], solution[attr_b][entity]));
-                        // clues.push(Clue::Neighbour(solution[attr_a][entity - 1], solution[attr_b][entity]));
+                        clues.push(Clue::Left(
+                            solution[attr_a][entity - 1],
+                            solution[attr_b][entity],
+                        ));
+                        // clues.push(Clue::Neighbour(
+                        //     solution[attr_a][entity - 1],
+                        //     solution[attr_b][entity],
+                        // ));
                     }
 
                     if entity < ENTITIES - 1 {
-                        clues.push(Clue::Right(solution[attr_a][entity + 1], solution[attr_b][entity]));
-                        // clues.push(Clue::Neighbour(solution[attr_a][entity + 1], solution[attr_b][entity]));
+                        clues.push(Clue::Right(
+                            solution[attr_a][entity + 1], 
+                            solution[attr_b][entity],
+                        ));
+                        // clues.push(Clue::Neighbour(
+                        //     solution[attr_a][entity + 1], 
+                        //     solution[attr_b][entity],
+                        // ));
                     }
                 }
             }
@@ -160,7 +173,7 @@ fn gen_possible_clues<'a>(solution: &'a Solution) -> Vec<Clue<'a>> {
 }
 
 fn get_solution<'a>(
-    attribute_values: &'a Vec<AttributeValue>,
+    attribute_values: &'a [AttributeValue],
     mut rng: &mut ThreadRng,
 ) -> Solution<'a> {
     attribute_values.iter()
