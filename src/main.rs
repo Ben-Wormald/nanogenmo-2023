@@ -1,17 +1,43 @@
 use itertools::Itertools;
-use rand::seq::SliceRandom;
-use rand::thread_rng;
-use std::fmt::{Debug, Display};
+use petgraph::{graph::{Edge, NodeIndex, UnGraph}, data::FromElements, algo::min_spanning_tree};
+use rand::{rngs::ThreadRng, seq::SliceRandom, thread_rng};
+use std::{cmp::Ordering, collections::HashMap, fmt::{Debug, Display}};
 
-const ENTITIES: usize = 4;
-const ATTRIBUTES: usize = 4;
+const ENTITIES: usize = 104;
+const ATTRIBUTES: usize = 104;
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum ClueType {
+    Is,
+    Left,
+    Right,
+}
+impl PartialOrd for ClueType {
+    fn partial_cmp(&self, _other: &Self) -> Option<Ordering> {
+        None
+    }
+}
 
 #[derive(Clone)]
 enum Clue<'a> {
     Is(&'a AttributeValue, &'a AttributeValue),
     Left(&'a AttributeValue, &'a AttributeValue),
     Right(&'a AttributeValue, &'a AttributeValue),
-    Neighbour(&'a AttributeValue, &'a AttributeValue),
+    // Neighbour(&'a AttributeValue, &'a AttributeValue),
+}
+impl Clue<'_> {
+    fn from_edge<'a>(
+        edge: &'a Edge<ClueType>,
+        index_nodes: &'a HashMap<NodeIndex, &AttributeValue>,
+    ) -> Clue<'a> {
+        let (a, b, c) = (edge.source(), edge.target(), &edge.weight);
+        let (a, b) = (index_nodes.get(&a).unwrap(), index_nodes.get(&b).unwrap());
+        match c {
+            ClueType::Is => Clue::Is(a, b),
+            ClueType::Left => Clue::Left(a, b),
+            ClueType::Right => Clue::Right(a, b),
+        }
+    }
 }
 impl Debug for Clue<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -19,18 +45,18 @@ impl Debug for Clue<'_> {
             Clue::Is(a, b) => write!(f, "{} is {}", a.value, b.value),
             Clue::Left(a, b) => write!(f, "{} is left of {}", a.value, b.value),
             Clue::Right(a, b) => write!(f, "{} is right of {}", a.value, b.value),
-            Clue::Neighbour(a, b) => write!(f, "{} is next to {}", a.value, b.value),
+            // Clue::Neighbour(a, b) => write!(f, "{} is next to {}", a.value, b.value),
         }
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq, Hash)]
 struct AttributeValue {
     attribute: usize,
     value: Value,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Hash)]
 enum Value {
     Pos(usize),
     Str(String),
@@ -44,117 +70,47 @@ impl Display for Value {
     }
 }
 
-trait IsValid {
-    fn is_valid(&self, clue: &Clue) -> bool;
-}
-
-type Solution<'a> = Vec<Vec<&'a Value>>;
-impl IsValid for Solution<'_> {
-    fn is_valid(&self, clue: &Clue) -> bool {
-        match clue {
-            Clue::Is(a, b) => {
-                let a_pos = match a.value {
-                    Value::Pos(value) => value,
-                    Value::Str(_) => self
-                        .get(a.attribute - 1).unwrap().iter()
-                        .position(|v| **v == a.value).unwrap()
-                };
-                let b_pos = match b.value {
-                    Value::Pos(value) => value,
-                    Value::Str(_) => self
-                        .get(b.attribute - 1).unwrap().iter()
-                        .position(|v| **v == b.value).unwrap()
-                };
-
-                a_pos == b_pos
-            },
-            Clue::Left(a, b) => {
-                let a_pos = match a.value {
-                    Value::Pos(value) => value,
-                    Value::Str(_) => self
-                        .get(a.attribute - 1).unwrap().iter()
-                        .position(|v| **v == a.value).unwrap()
-                };
-                let b_pos = match b.value {
-                    Value::Pos(value) => value,
-                    Value::Str(_) => self
-                        .get(b.attribute - 1).unwrap().iter()
-                        .position(|v| **v == b.value).unwrap()
-                };
-
-                b_pos >= 1 && a_pos == b_pos - 1
-            },
-            Clue::Right(a, b) => {
-                let a_pos = match a.value {
-                    Value::Pos(value) => value,
-                    Value::Str(_) => self
-                        .get(a.attribute - 1).unwrap().iter()
-                        .position(|v| **v == a.value).unwrap()
-                };
-                let b_pos = match b.value {
-                    Value::Pos(value) => value,
-                    Value::Str(_) => self
-                        .get(b.attribute - 1).unwrap().iter()
-                        .position(|v| **v == b.value).unwrap()
-                };
-
-                a_pos == b_pos + 1
-            },
-            Clue::Neighbour(a, b) => {
-                let a_pos = match a.value {
-                    Value::Pos(value) => value,
-                    Value::Str(_) => self
-                        .get(a.attribute - 1).unwrap().iter()
-                        .position(|v| **v == a.value).unwrap()
-                };
-                let b_pos = match b.value {
-                    Value::Pos(value) => value,
-                    Value::Str(_) => self
-                        .get(b.attribute - 1).unwrap().iter()
-                        .position(|v| **v == b.value).unwrap()
-                };
-
-                (b_pos >= 1 && a_pos == b_pos - 1) || a_pos == b_pos + 1
-            },
-        }
-    }
-}
+type Solution<'a> = Vec<Vec<&'a AttributeValue>>;
 
 fn main() {
+    let mut rng = &mut thread_rng();
     let attr_vals = get_attribute_values();
 
-    let mut clues = gen_all_clues(&attr_vals);
-    clues.shuffle(&mut thread_rng());
-    
-    let mut accepted_clues: Vec<Clue> = Vec::new();
-    
-    let mut possible_solutions = gen_possible_solutions(&attr_vals);
-    
-    dbg!(attr_vals.len());
-    dbg!(clues.len());
-    dbg!(possible_solutions.len());
+    let random_solution = get_solution(&attr_vals, rng);
+    let mut possible_clues = gen_possible_clues(&random_solution);
+    possible_clues.shuffle(&mut rng);
+    let mut full_graph = UnGraph::<&AttributeValue, ClueType>::new_undirected();
 
-    for clue in clues.into_iter() {
-        let solutions = get_solutions(possible_solutions.clone(), &clue);
-        let n_solutions = solutions.len();
+    let mut node_indices: HashMap::<&AttributeValue, NodeIndex> = HashMap::new();
+    let mut index_nodes: HashMap::<NodeIndex, &AttributeValue> = HashMap::new();
 
-        if n_solutions == 0 || n_solutions == possible_solutions.len() {
-            continue;
-        }
-
-        possible_solutions = solutions;
-        accepted_clues.push(clue);
-
-        if n_solutions == 1 {
-            break;
-        }
+    for a_v in attr_vals.iter() {
+        let node_index = full_graph.add_node(a_v);
+        node_indices.insert(a_v, node_index);
+        index_nodes.insert(node_index, a_v);
     }
 
-    dbg!(possible_solutions, accepted_clues);
+    for clue in possible_clues.iter() {
+        let (a, b, c) = match clue {
+            Clue::Is(a, b) => (a, b, ClueType::Is),
+            Clue::Left(a, b) => (a, b, ClueType::Left),
+            Clue::Right(a, b) => (a, b, ClueType::Right),
+        };
+        let (a, b) = (node_indices.get(a).cloned().unwrap(), node_indices.get(b).cloned().unwrap());
+        full_graph.add_edge(a, b, c);
+    }
+    
+    let mst = UnGraph::<_, _>::from_elements(min_spanning_tree(&full_graph));
+
+    let clues = mst.raw_edges().iter()
+        .map(|edge| Clue::from_edge(edge, &index_nodes)).collect::<Vec<Clue>>();
+
+    dbg!(&clues);
+    dbg!(&clues.len());
 }
 
 fn get_attribute_values() -> Vec<AttributeValue> {
-    let chars: Vec<char> = "abcdefghijklmnopqrstuvwxyz".chars().collect();
+    let chars: Vec<char> = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ".chars().collect();
     let mut attribute_values = vec!();
 
     for attribute in 0..ATTRIBUTES {
@@ -162,7 +118,8 @@ fn get_attribute_values() -> Vec<AttributeValue> {
             let value = if attribute == 0 {
                 Value::Pos(entity + 1)
             } else {
-                Value::Str(format!("{}_{}", attribute, chars.get(entity).unwrap()))
+                let value_char = chars.get(entity % chars.len()).unwrap();
+                Value::Str(format!("{}_{}", attribute, value_char))
             };
 
             attribute_values.push(AttributeValue {
@@ -175,29 +132,39 @@ fn get_attribute_values() -> Vec<AttributeValue> {
     attribute_values
 }
 
-fn gen_all_clues<'a>(attribute_values: &'a Vec<AttributeValue>) -> Vec<Clue<'a>> {
+fn gen_possible_clues<'a>(solution: &'a Solution) -> Vec<Clue<'a>> {
     let mut clues = Vec::new();
 
-    for value_a in attribute_values.iter() {
-        for value_b in attribute_values.iter() {
-            if value_a.attribute == value_b.attribute && value_a.value == value_b.value {
-                continue;
-            }
-
-            if value_a.attribute != value_b.attribute {
-                clues.push(Clue::Is(value_a, value_b));
-            }
-
-            if value_a.attribute != 0 {
-                if value_b.value != Value::Pos(1) {
-                    clues.push(Clue::Left(value_a, value_b));
+    for attr_a in 0..ATTRIBUTES {
+        for attr_b in 0..ATTRIBUTES {
+            for entity in 0..ENTITIES {
+                if attr_a != attr_b {
+                    clues.push(Clue::Is(solution[attr_a][entity], solution[attr_b][entity]));
                 }
 
-                if value_b.value != Value::Pos(ENTITIES) {
-                    clues.push(Clue::Right(value_a, value_b));
-                }
+                if attr_a != 0 {
+                    if entity > 0 {
+                        clues.push(Clue::Left(
+                            solution[attr_a][entity - 1],
+                            solution[attr_b][entity],
+                        ));
+                        // clues.push(Clue::Neighbour(
+                        //     solution[attr_a][entity - 1],
+                        //     solution[attr_b][entity],
+                        // ));
+                    }
 
-                clues.push(Clue::Neighbour(value_a, value_b));
+                    if entity < ENTITIES - 1 {
+                        clues.push(Clue::Right(
+                            solution[attr_a][entity + 1], 
+                            solution[attr_b][entity],
+                        ));
+                        // clues.push(Clue::Neighbour(
+                        //     solution[attr_a][entity + 1], 
+                        //     solution[attr_b][entity],
+                        // ));
+                    }
+                }
             }
         }
     }
@@ -205,23 +172,19 @@ fn gen_all_clues<'a>(attribute_values: &'a Vec<AttributeValue>) -> Vec<Clue<'a>>
     clues
 }
 
-fn gen_possible_solutions<'a>(attribute_values: &'a Vec<AttributeValue>) -> Vec<Solution<'a>> {
-    let value_sets: Vec<Vec<&Value>> = attribute_values.iter()
+fn get_solution<'a>(
+    attribute_values: &'a [AttributeValue],
+    mut rng: &mut ThreadRng,
+) -> Solution<'a> {
+    attribute_values.iter()
         .chunks(ENTITIES).into_iter()
-        .map(|chunk| chunk.map(|a_v| &a_v.value).collect())
-        .collect();
-
-    let permutations = value_sets[1..].into_iter()
-        .map(|value_set| value_set.into_iter()
-            .map(|value| *value)
-            .permutations(ENTITIES).collect::<Vec<Vec<&Value>>>()
-        );
-
-    permutations.multi_cartesian_product().collect()
-}
-
-fn get_solutions<'a>(solutions: Vec<Solution<'a>>, clue: &Clue) -> Vec<Solution<'a>> {
-    solutions.into_iter()
-        .filter(|solution| solution.is_valid(clue))
+        .enumerate()
+        .map(|(idx, chunk)| {
+            let mut chunk = chunk.collect::<Vec<&AttributeValue>>();
+            if idx > 0 {
+                chunk.shuffle(&mut rng);
+            }
+            chunk
+        })
         .collect()
 }
