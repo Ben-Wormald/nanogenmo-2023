@@ -109,7 +109,7 @@ fn main() {
 }
 
 fn get_attribute_values() -> Vec<AttributeValue> {
-    let chars: Vec<char> = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ".chars().collect();
+    let chars: Vec<char> = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ".chars().collect();
     let mut attribute_values = vec!();
 
     for attribute in 0..ATTRIBUTES {
@@ -117,7 +117,8 @@ fn get_attribute_values() -> Vec<AttributeValue> {
             let value = if attribute == 0 {
                 Value::Pos(entity + 1)
             } else {
-                Value::Str(format!("{}_{}", attribute, chars.get(entity).unwrap()))
+                let value_char = chars.get(entity % chars.len()).unwrap();
+                Value::Str(format!("{}_{}", attribute, value_char))
             };
 
             attribute_values.push(AttributeValue {
