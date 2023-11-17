@@ -4,8 +4,8 @@ use rand::seq::SliceRandom;
 use rand_seeder::SipRng;
 use std::{cmp::Ordering, collections::HashMap, env, fmt::{Debug, Display}};
 
-const ENTITIES: usize = 104;
-const ATTRIBUTES: usize = 104;
+const ENTITIES: usize = 500;
+const ATTRIBUTES: usize = 15;
 const DEFAULT_SEED: &str = "zebra";
 
 #[derive(Clone, Debug, Eq, PartialEq)]

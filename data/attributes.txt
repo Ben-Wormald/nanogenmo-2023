@@ -1,0 +1,15 @@
+name
+age
+country
+relic
+verse
+book
+hymn
+food
+saint
+sin
+character
+job
+motto
+colour
+animal

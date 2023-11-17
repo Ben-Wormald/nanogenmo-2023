@@ -1,0 +1,8 @@
+Prime
+Terce
+Sext
+None
+Vespers
+Compline
+Matins
+Lauds
