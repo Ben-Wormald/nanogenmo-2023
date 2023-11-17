@@ -1,0 +1,38 @@
+eedificium
+cloister
+dormitory
+chapter house
+balneary
+infirmary
+pigsties
+stables
+smithy
+guest house
+herb garden
+library
+scriptorium
+crypt
+tower
+refectory
+kitchen
+cellar
+abattoir
+cloister
+courtyard
+lavatorium
+shrine
+sacristry
+transept
+nave
+calefactory
+apse
+narthex
+vestibule
+choir
+sanctuary
+ambulatory
+baptistery
+ruins
+village
+road
+forest
