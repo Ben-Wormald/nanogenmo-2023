@@ -1,10 +1,12 @@
 use itertools::Itertools;
 use petgraph::{graph::{Edge, NodeIndex, UnGraph}, data::FromElements, algo::min_spanning_tree};
-use rand::{rngs::ThreadRng, seq::SliceRandom, thread_rng};
-use std::{cmp::Ordering, collections::HashMap, fmt::{Debug, Display}};
+use rand::seq::SliceRandom;
+use rand_seeder::SipRng;
+use std::{cmp::Ordering, collections::HashMap, env, fmt::{Debug, Display}};
 
 const ENTITIES: usize = 104;
 const ATTRIBUTES: usize = 104;
+const DEFAULT_SEED: &str = "zebra";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum ClueType {
@@ -73,12 +75,15 @@ impl Display for Value {
 type Solution<'a> = Vec<Vec<&'a AttributeValue>>;
 
 fn main() {
-    let mut rng = &mut thread_rng();
+    let seed = env::var("RNG_SEED").unwrap_or(DEFAULT_SEED.to_string());
+    let mut rng: SipRng = rand_seeder::Seeder::from(seed).make_rng();
+
     let attr_vals = get_attribute_values();
 
-    let random_solution = get_solution(&attr_vals, rng);
+    let random_solution = get_solution(&attr_vals, &mut rng);
     let mut possible_clues = gen_possible_clues(&random_solution);
     possible_clues.shuffle(&mut rng);
+
     let mut full_graph = UnGraph::<&AttributeValue, ClueType>::new_undirected();
 
     let mut node_indices: HashMap::<&AttributeValue, NodeIndex> = HashMap::new();
@@ -174,7 +179,7 @@ fn gen_possible_clues<'a>(solution: &'a Solution) -> Vec<Clue<'a>> {
 
 fn get_solution<'a>(
     attribute_values: &'a [AttributeValue],
-    mut rng: &mut ThreadRng,
+    mut rng: &mut SipRng,
 ) -> Solution<'a> {
     attribute_values.iter()
         .chunks(ENTITIES).into_iter()
