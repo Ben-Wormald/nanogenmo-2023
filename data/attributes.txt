@@ -1,6 +1,6 @@
 name
 age
-country
+city
 languages
 location
 relic
