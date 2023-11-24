@@ -1,10 +1,17 @@
+#![allow(dead_code)]
+
 use std::{collections::HashSet, fs::File, io::Write};
 
-const SOURCE: &str = "./data/sources/englands_immigrants_search_results.csv";
-const NAMES: &str = "./data/name.txt";
-const TOWNS: &str = "./data/town.txt";
-
 fn main() {
+    // names_towns();
+    ages();
+}
+
+fn names_towns() {
+    const SOURCE: &str = "./data/sources/englands_immigrants_search_results.csv";
+    const NAMES: &str = "./data/name.txt";
+    const TOWNS: &str = "./data/town.txt";
+
     let mut reader = csv::ReaderBuilder::new()
         .flexible(true)
         .from_path(SOURCE).unwrap();
@@ -29,8 +36,10 @@ fn main() {
         }
 
         if let Some(town) = line.get(town_field) {
-            if town.chars().all(|c| c.is_alphabetic() || c.is_whitespace()) && town.trim().len() > 0 {
-                println!("{town}");
+            if
+                town.chars().all(|c| c.is_alphabetic() || c.is_whitespace()) &&
+                town.trim().len() > 0
+            {
                 towns.insert(town.to_string());
             }
         }
@@ -47,5 +56,15 @@ fn main() {
     for town in towns {
         let town = format!("{town}\n");
         towns_file.write(town.as_bytes()).unwrap();
+    }
+}
+
+fn ages() {
+    const NAMES: &str = "./data/age.txt";
+    let mut ages_file = File::create(NAMES).unwrap();
+
+    for age in 15..1500 {
+        let age = format!("{age}\n");
+        ages_file.write(age.as_bytes()).unwrap();
     }
 }
