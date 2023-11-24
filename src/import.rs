@@ -1,28 +1,51 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, fs::File, io::Write};
 
 const SOURCE: &str = "./data/sources/englands_immigrants_search_results.csv";
 const NAMES: &str = "./data/name.txt";
-const CITIES: &str = "./data/city.txt";
+const TOWNS: &str = "./data/town.txt";
 
 fn main() {
     let mut reader = csv::ReaderBuilder::new()
         .flexible(true)
         .from_path(SOURCE).unwrap();
 
+    let name_field = reader
+        .headers().unwrap().iter()
+        .position(|field| field == "forename").unwrap();
+    let town_field = reader
+        .headers().unwrap().iter()
+        .position(|field| field == "origin_town").unwrap();
+
     let mut names = HashSet::<String>::new();
-    let mut cities = HashSet::<String>::new();
+    let mut towns = HashSet::<String>::new();
 
     for result in reader.records() {
         let line = result.unwrap();
 
-        if let Some(name) = line.get(4) {
-            names.insert(name.to_string());
+        if let Some(name) = line.get(name_field) {
+            if name.chars().all(|c| c.is_alphabetic()) {
+                names.insert(name.to_string());
+            }
         }
 
-        if let Some(city) = line.get(12) {
-            cities.insert(city.to_string());
+        if let Some(town) = line.get(town_field) {
+            if town.chars().all(|c| c.is_alphabetic() || c.is_whitespace()) && town.trim().len() > 0 {
+                println!("{town}");
+                towns.insert(town.to_string());
+            }
         }
     }
-    dbg!(&cities);
-    dbg!(cities.len());
+
+    let mut names_file = File::create(NAMES).unwrap();
+    let mut towns_file = File::create(TOWNS).unwrap();
+
+    for name in names {
+        let name = format!("{name}\n");
+        names_file.write(name.as_bytes()).unwrap();
+    }
+
+    for town in towns {
+        let town = format!("{town}\n");
+        towns_file.write(town.as_bytes()).unwrap();
+    }
 }
