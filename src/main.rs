@@ -2,11 +2,18 @@ use itertools::Itertools;
 use petgraph::{graph::{Edge, NodeIndex, UnGraph}, data::FromElements, algo::min_spanning_tree};
 use rand::seq::SliceRandom;
 use rand_seeder::SipRng;
-use std::{cmp::Ordering, collections::HashMap, env, fmt::{Debug, Display}};
+use std::{cmp::Ordering, collections::HashMap, env, fmt::{Debug, Display}, fs::File, io::{BufReader, BufRead}};
 
 const ENTITIES: usize = 500;
 const ATTRIBUTES: usize = 15;
 const DEFAULT_SEED: &str = "zebra";
+const ATTRIBUTE_LIST: &str = "./data/attributes.txt";
+
+#[derive(Debug, Eq, PartialEq, Hash)]
+enum Attribute {
+    Pos,
+    Str(String),
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum ClueType {
@@ -54,7 +61,7 @@ impl Debug for Clue<'_> {
 
 #[derive(Debug, Eq, PartialEq, Hash)]
 struct AttributeValue {
-    attribute: usize,
+    attribute: Attribute,
     value: Value,
 }
 
@@ -78,7 +85,8 @@ fn main() {
     let seed = env::var("RNG_SEED").unwrap_or(DEFAULT_SEED.to_string());
     let mut rng: SipRng = rand_seeder::Seeder::from(seed).make_rng();
 
-    let attr_vals = get_attribute_values();
+    let attributes = get_attributes();
+    let attr_vals = get_attribute_values(&attributes, &mut rng);
 
     let random_solution = get_solution(&attr_vals, &mut rng);
     let mut possible_clues = gen_possible_clues(&random_solution);
@@ -114,21 +122,47 @@ fn main() {
     dbg!(&clues.len());
 }
 
-fn get_attribute_values() -> Vec<AttributeValue> {
-    let chars: Vec<char> = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ".chars().collect();
+fn get_attributes() -> Vec<Attribute> {
+    let attribute_list = File::open(ATTRIBUTE_LIST).unwrap();
+    let attribute_list = BufReader::new(attribute_list).lines();
+
+    let mut attributes = Vec::<Attribute>::new();
+
+    for attribute in attribute_list {
+        if let Ok(attribute) = attribute {
+            attributes.push(match attribute.as_str() {
+                "POS" => Attribute::Pos,
+                _ => Attribute::Str(attribute),
+            });
+        }
+    }
+
+    attributes
+}
+
+fn get_attribute_values(attributes: &Vec<Attribute>, mut rng: &mut SipRng) -> Vec<AttributeValue> {
     let mut attribute_values = vec!();
 
-    for attribute in 0..ATTRIBUTES {
+    for attribute in attributes.iter() {
+        let values = if attribute != Attribute::Pos {
+            let values = format!("./data/{attribute}.txt");
+            let values = File::open(values).unwrap();
+            let mut values = BufReader::new(values).lines().filter_map(|line| line.ok()).collect::<Vec<String>>();
+            values.shuffle(&mut rng);
+            values
+        } else {
+            vec![]
+        };
+
         for entity in 0..ENTITIES {
-            let value = if attribute == 0 {
+            let value = if attribute == "INDEX" {
                 Value::Pos(entity + 1)
             } else {
-                let value_char = chars.get(entity % chars.len()).unwrap();
-                Value::Str(format!("{}_{}", attribute, value_char))
+                Value::Str(values.get(entity).unwrap().to_string())
             };
-
+            
             attribute_values.push(AttributeValue {
-                attribute,
+                attribute: attribute.clone(),
                 value,
             });
         }
