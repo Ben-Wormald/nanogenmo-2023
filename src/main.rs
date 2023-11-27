@@ -277,7 +277,7 @@ fn write_output(clues: Vec<Clue>, rng: &mut SipRng) {
         "it occurred to me that",
         "it was revealed to me that",
         "a brother informed me that",
-        "a brother let slip me that",
+        "a brother let slip to me that",
         "it transpired that",
         "I overheard a muttering that",
         "it struck me that",
