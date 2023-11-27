@@ -6,12 +6,16 @@ use std::{
     cmp::Ordering,
     collections::HashMap,
     env,
-    fmt::{Debug, Display},
+    fmt::Debug,
     fs::File,
     io::{BufReader, BufRead, Write},
 };
 
-const ENTITIES: usize = 500;
+mod text;
+
+use text::write_output;
+
+const ENTITIES: usize = 350;
 const DEFAULT_SEED: &str = "zebra";
 const ATTRIBUTE_LIST: &str = "./data/attributes.txt";
 const HOURS_LIST: &str = "./data/hours.txt";
@@ -59,19 +63,10 @@ impl Clue<'_> {
 impl Debug for Clue<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Clue::Is(a, b) => write!(f, "{} is {}", a.value, b.value),
-            Clue::Left(a, b) => write!(f, "{} is left of {}", a.value, b.value),
-            Clue::Right(a, b) => write!(f, "{} is right of {}", a.value, b.value),
-            // Clue::Neighbour(a, b) => write!(f, "{} is next to {}", a.value, b.value),
-        }
-    }
-}
-impl Display for Clue<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Clue::Is(a, b) => write!(f, "{} is {}", a, b),
-            Clue::Left(a, b) => write!(f, "{} resides in the cell to the left of {}", a, b),
-            Clue::Right(a, b) => write!(f, "{} inhabits the cell to the right of {}", a, b),
+            Clue::Is(a, b) => write!(f, "{:?} is {:?}", a.value, b.value),
+            Clue::Left(a, b) => write!(f, "{:?} is left of {:?}", a.value, b.value),
+            Clue::Right(a, b) => write!(f, "{:?} is right of {:?}", a.value, b.value),
+            // Clue::Neighbour(a, b) => write!(f, "{:?} is next to {:?}", a.value, b.value),
         }
     }
 }
@@ -81,27 +76,13 @@ struct AttributeValue {
     attribute: Attribute,
     value: Value,
 }
-impl Display for AttributeValue {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Attribute::Str(attribute) = &self.attribute {
-            match attribute.as_str() {
-                "name" => write!(f, "Brother {}", self.value),
-                "age" => write!(f, "the monk who is {} years of age", self.value),
-                "town" => write!(f, "the monk who hails from {}", self.value),
-                _ => panic!("unknown attr")
-            }
-        } else {
-            write!(f, "the monk who occupies cell {}", self.value)
-        }
-    }
-}
 
-#[derive(Debug, Eq, PartialEq, Hash)]
+#[derive(Eq, PartialEq, Hash)]
 enum Value {
     Pos(usize),
     Str(String),
 }
-impl Display for Value {
+impl Debug for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Value::Pos(v) => write!(f, "{}", v),
@@ -158,19 +139,17 @@ fn get_attributes() -> Vec<Attribute> {
 
     let mut attributes = Vec::<Attribute>::new();
 
-    for attribute in attribute_list {
-        if let Ok(attribute) = attribute {
-            attributes.push(match attribute.as_str() {
-                "POS" => Attribute::Pos,
-                _ => Attribute::Str(attribute),
-            });
-        }
+    for attribute in attribute_list.flatten() {
+        attributes.push(match attribute.as_str() {
+            "POS" => Attribute::Pos,
+            _ => Attribute::Str(attribute),
+        });
     }
 
     attributes
 }
 
-fn get_attribute_values(attributes: &Vec<Attribute>, mut rng: &mut SipRng) -> Vec<AttributeValue> {
+fn get_attribute_values(attributes: &[Attribute], mut rng: &mut SipRng) -> Vec<AttributeValue> {
     let mut attribute_values = vec!();
 
     for attribute in attributes.iter() {
@@ -180,7 +159,7 @@ fn get_attribute_values(attributes: &Vec<Attribute>, mut rng: &mut SipRng) -> Ve
                 let values = format!("./data/{attribute}.txt");
                 let values = File::open(values).unwrap();
                 let mut values = BufReader::new(values)
-                    .lines().filter_map(|line| line.ok()).collect::<Vec<String>>();
+                    .lines().map_while(Result::ok).collect::<Vec<String>>();
                 values.shuffle(&mut rng);
                 values
             },
@@ -257,54 +236,4 @@ fn get_solution<'a>(
             chunk
         })
         .collect()
-}
-
-fn write_output(clues: Vec<Clue>, rng: &mut SipRng) {
-    let hours = File::open(HOURS_LIST).unwrap();
-    let hours = BufReader::new(hours).lines().map(|line| line.unwrap()).collect::<Vec<String>>();
-    let n_hours = hours.len();
-    let mut hours = hours.into_iter().cycle();
-
-    let text_one = vec![
-        "At the hour of",
-        "Upon",
-        "As we neared the end of",
-        "During",
-        "When it became",
-    ];
-
-    let text_two = vec![
-        "it occurred to me that",
-        "it was revealed to me that",
-        "a brother informed me that",
-        "a brother let slip to me that",
-        "it transpired that",
-        "I overheard a muttering that",
-        "it struck me that",
-        "it became clear that",
-    ];
-
-    let mut output = File::create(OUTPUT_FILE).unwrap();
-
-    output.write("Il nome della zebra\n".as_bytes()).unwrap();
-
-    for (index, clue) in clues.into_iter().enumerate() {
-        if index % n_hours == 0 {
-            let day = index / n_hours + 1;
-            let day = roman::to(day as i32).unwrap();
-            let text = format!("\n\nDay {}\n\n", day);
-
-            output.write(text.as_bytes()).unwrap();
-        }
-
-        let text = format!(
-            "{} {} {}",
-            text_one.choose(rng).unwrap(),
-            hours.next().unwrap(),
-            text_two.choose(rng).unwrap(),
-        );
-        let clue = format!("{} {}.\n", text, clue);
-
-        output.write(clue.as_bytes()).unwrap();
-    }
 }
