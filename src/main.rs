@@ -2,14 +2,22 @@ use itertools::Itertools;
 use petgraph::{graph::{Edge, NodeIndex, UnGraph}, data::FromElements, algo::min_spanning_tree};
 use rand::seq::SliceRandom;
 use rand_seeder::SipRng;
-use std::{cmp::Ordering, collections::HashMap, env, fmt::{Debug, Display}, fs::File, io::{BufReader, BufRead}};
+use std::{
+    cmp::Ordering,
+    collections::HashMap,
+    env,
+    fmt::{Debug, Display},
+    fs::File,
+    io::{BufReader, BufRead, Write},
+};
 
 const ENTITIES: usize = 500;
-const ATTRIBUTES: usize = 15;
 const DEFAULT_SEED: &str = "zebra";
 const ATTRIBUTE_LIST: &str = "./data/attributes.txt";
+const HOURS_LIST: &str = "./data/hours.txt";
+const OUTPUT_FILE: &str = "./output.txt";
 
-#[derive(Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 enum Attribute {
     Pos,
     Str(String),
@@ -58,11 +66,34 @@ impl Debug for Clue<'_> {
         }
     }
 }
+impl Display for Clue<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Clue::Is(a, b) => write!(f, "{} is {}", a, b),
+            Clue::Left(a, b) => write!(f, "{} resides in the cell to the left of {}", a, b),
+            Clue::Right(a, b) => write!(f, "{} inhabits the cell to the right of {}", a, b),
+        }
+    }
+}
 
 #[derive(Debug, Eq, PartialEq, Hash)]
 struct AttributeValue {
     attribute: Attribute,
     value: Value,
+}
+impl Display for AttributeValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Attribute::Str(attribute) = &self.attribute {
+            match attribute.as_str() {
+                "name" => write!(f, "Brother {}", self.value),
+                "age" => write!(f, "the monk who is {} years of age", self.value),
+                "town" => write!(f, "the monk who hails from {}", self.value),
+                _ => panic!("unknown attr")
+            }
+        } else {
+            write!(f, "the monk who occupies cell {}", self.value)
+        }
+    }
 }
 
 #[derive(Debug, Eq, PartialEq, Hash)]
@@ -89,7 +120,7 @@ fn main() {
     let attr_vals = get_attribute_values(&attributes, &mut rng);
 
     let random_solution = get_solution(&attr_vals, &mut rng);
-    let mut possible_clues = gen_possible_clues(&random_solution);
+    let mut possible_clues = gen_possible_clues(&random_solution, attributes.len());
     possible_clues.shuffle(&mut rng);
 
     let mut full_graph = UnGraph::<&AttributeValue, ClueType>::new_undirected();
@@ -118,8 +149,7 @@ fn main() {
     let clues = mst.raw_edges().iter()
         .map(|edge| Clue::from_edge(edge, &index_nodes)).collect::<Vec<Clue>>();
 
-    dbg!(&clues);
-    dbg!(&clues.len());
+    write_output(clues, &mut rng);
 }
 
 fn get_attributes() -> Vec<Attribute> {
@@ -144,21 +174,22 @@ fn get_attribute_values(attributes: &Vec<Attribute>, mut rng: &mut SipRng) -> Ve
     let mut attribute_values = vec!();
 
     for attribute in attributes.iter() {
-        let values = if attribute != Attribute::Pos {
-            let values = format!("./data/{attribute}.txt");
-            let values = File::open(values).unwrap();
-            let mut values = BufReader::new(values).lines().filter_map(|line| line.ok()).collect::<Vec<String>>();
-            values.shuffle(&mut rng);
-            values
-        } else {
-            vec![]
+        let values = match attribute {
+            Attribute::Pos => vec![],
+            Attribute::Str(attribute) => {
+                let values = format!("./data/{attribute}.txt");
+                let values = File::open(values).unwrap();
+                let mut values = BufReader::new(values)
+                    .lines().filter_map(|line| line.ok()).collect::<Vec<String>>();
+                values.shuffle(&mut rng);
+                values
+            },
         };
 
         for entity in 0..ENTITIES {
-            let value = if attribute == "INDEX" {
-                Value::Pos(entity + 1)
-            } else {
-                Value::Str(values.get(entity).unwrap().to_string())
+            let value = match attribute {
+                Attribute::Pos => Value::Pos(entity + 1),
+                Attribute::Str(_) => Value::Str(values.get(entity).unwrap().to_string()),
             };
             
             attribute_values.push(AttributeValue {
@@ -171,11 +202,11 @@ fn get_attribute_values(attributes: &Vec<Attribute>, mut rng: &mut SipRng) -> Ve
     attribute_values
 }
 
-fn gen_possible_clues<'a>(solution: &'a Solution) -> Vec<Clue<'a>> {
+fn gen_possible_clues<'a>(solution: &'a Solution, n_attributes: usize) -> Vec<Clue<'a>> {
     let mut clues = Vec::new();
 
-    for attr_a in 0..ATTRIBUTES {
-        for attr_b in 0..ATTRIBUTES {
+    for attr_a in 0..n_attributes {
+        for attr_b in 0..n_attributes {
             for entity in 0..ENTITIES {
                 if attr_a != attr_b {
                     clues.push(Clue::Is(solution[attr_a][entity], solution[attr_b][entity]));
@@ -226,4 +257,54 @@ fn get_solution<'a>(
             chunk
         })
         .collect()
+}
+
+fn write_output(clues: Vec<Clue>, rng: &mut SipRng) {
+    let hours = File::open(HOURS_LIST).unwrap();
+    let hours = BufReader::new(hours).lines().map(|line| line.unwrap()).collect::<Vec<String>>();
+    let n_hours = hours.len();
+    let mut hours = hours.into_iter().cycle();
+
+    let text_one = vec![
+        "At the hour of",
+        "Upon",
+        "As we neared the end of",
+        "During",
+        "When it became",
+    ];
+
+    let text_two = vec![
+        "it occurred to me that",
+        "it was revealed to me that",
+        "a brother informed me that",
+        "a brother let slip me that",
+        "it transpired that",
+        "I overheard a muttering that",
+        "it struck me that",
+        "it became clear that",
+    ];
+
+    let mut output = File::create(OUTPUT_FILE).unwrap();
+
+    output.write("Il nome della zebra\n".as_bytes()).unwrap();
+
+    for (index, clue) in clues.into_iter().enumerate() {
+        if index % n_hours == 0 {
+            let day = index / n_hours + 1;
+            let day = roman::to(day as i32).unwrap();
+            let text = format!("\n\nDay {}\n\n", day);
+
+            output.write(text.as_bytes()).unwrap();
+        }
+
+        let text = format!(
+            "{} {} {}",
+            text_one.choose(rng).unwrap(),
+            hours.next().unwrap(),
+            text_two.choose(rng).unwrap(),
+        );
+        let clue = format!("{} {}.\n", text, clue);
+
+        output.write(clue.as_bytes()).unwrap();
+    }
 }
