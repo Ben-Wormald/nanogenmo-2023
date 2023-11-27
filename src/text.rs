@@ -2,6 +2,8 @@ use std::fmt::Display;
 
 use crate::*;
 
+const OUTPUT_FILE: &str = "./il-nome-della-zebra.txt";
+
 pub fn write_output(clues: Vec<Clue>, rng: &mut SipRng) {
     let hours = File::open(HOURS_LIST).unwrap();
     let hours = BufReader::new(hours).lines().map(|line| line.unwrap()).collect::<Vec<String>>();

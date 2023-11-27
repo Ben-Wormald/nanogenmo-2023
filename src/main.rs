@@ -19,7 +19,6 @@ const ENTITIES: usize = 350;
 const DEFAULT_SEED: &str = "zebra";
 const ATTRIBUTE_LIST: &str = "./data/attributes.txt";
 const HOURS_LIST: &str = "./data/hours.txt";
-const OUTPUT_FILE: &str = "./output.txt";
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 enum Attribute {

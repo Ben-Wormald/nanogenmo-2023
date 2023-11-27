@@ -1,9 +1,12 @@
 # Il nome della zebra
 
 A [zebra puzzle](https://en.wikipedia.org/wiki/Zebra_Puzzle) murder mystery set in a Benedictine
-Abbey, for [NaNoGenMo 2023](https://github.com/NaNoGenMo/2023/issues/3).
+abbey, for [NaNoGenMo 2023](https://github.com/NaNoGenMo/2023/issues/3).
 
 > As we neared the end of Sext a brother let slip to me that the monk who hails from Moudon lives in the cell to the left of the monk whose patron saint is Hildegard of Bingen.
+
+See `il-nome-della-zebra.txt` for an example output. Set the `RNG_SEED` environment variable to seed
+the randomiser for deterministic results.
 
 
 ## Data sources
@@ -19,5 +22,5 @@ Abbey, for [NaNoGenMo 2023](https://github.com/NaNoGenMo/2023/issues/3).
 iconv -f UTF-16LE -t UTF-8 data/sources/englands_immigrants_search_results.csv > data/sources/englands_immigrants_search_results.utf8.csv
 
 # count words in output
-cat output.txt | wc -w
+cat il-nome-della-zebra.txt | wc -w
 ```
